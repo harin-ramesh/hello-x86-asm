@@ -35,10 +35,90 @@ main:
     mov si, os_boot_message
     call print
 
+    mov [ebr_drive_number] dl
+    mov ax, 1
+    mov cl, 1
+    mov bx, 0x7E00
+    call disk_read
+
     HLT
 
 halt:
     JMP halt
+
+; Input: lba index in ax
+; Output: 
+; cx [0-5] - Sector number
+; cx [6-15] - Sector number
+; dx - head
+lba_chs:
+    push ax
+    push dx
+
+    xor dx, dx
+    div word [bdb_sectors_per_track]
+    inc dx
+    mov dx, cx
+
+    xor dx, dx
+    div word [bdb_heads]
+
+    mov dh, dl
+    mov ch, al
+    shl ah, 6
+    or cl, ah
+    
+    pop ax
+    mov dl, al
+    pop ax
+
+    ret
+    
+
+disk_read:
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    
+    call lba_chs
+    mov ah, 02h
+    mov di, 3
+
+retry:
+    stc
+    int 13h
+    jnc done_read
+    call disk_reset
+    dec di
+    test di, di
+    jnz retry
+
+failed_disk_read:
+    mov si, read_failure
+    call print
+    hlt
+    jmp halt
+
+disk_reset:
+    pusha
+    mov ah, 0
+    stc
+    int 13h
+    jc failed_disk_read
+    popa
+    ret
+
+done_read:
+    pop ax
+    pop bx
+    pop cx
+    pop dx
+    pop di
+
+    ret
+
 
 print:
     push si
@@ -62,6 +142,7 @@ done_print:
     ret
 
 os_boot_message DB 'OS booted successfully', 0x0D, 0x0A, 0
+read_failure DB 'Failed to read disk', 0x0D, 0x0A, 0
 
 TIMES 510-($-$$) DB 0
 DW 0AA55h
