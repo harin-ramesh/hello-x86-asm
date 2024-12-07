@@ -8,15 +8,15 @@ bdb_oem: DB "MSWIN4.1"
 bdb_byter_per_sector: DW 512
 bdb_sectors_per_cluster: DB 1
 bdb_reserved_sectors: DW 1
-dbd_fat_count: DB 2
-dbd_dir_entries_count: DW 0E0h
-dbd_total_sectors: DW 2880
-dbd_media_descriptor_types: DB 0F0h
-dbd_sectors_per_fat: DW 9
-dbd_sectors_per_track: DW 18
-dbd_heads: DW 2
-dbd_hidden_sectors: DD 0
-dbd_large_sector_count: DD 0
+bdb_fat_count: DB 2
+bdb_dir_entries_count: DW 0E0h
+bdb_total_sectors: DW 2880
+bdb_media_descriptor_types: DB 0F0h
+bdb_sectors_per_fat: DW 9
+bdb_sectors_per_track: DW 18
+bdb_heads: DW 2
+bdb_hidden_sectors: DD 0
+bdb_large_sector_count: DD 0
 
 ebr_drive_number: DB 0
                   DB 0
@@ -32,14 +32,14 @@ main:
     mov ss, ax
     mov sp, 0x7c00
 
-    mov si, os_boot_message
-    call print
-
-    mov [ebr_drive_number] dl
+    mov [ebr_drive_number], dl
     mov ax, 1
     mov cl, 1
     mov bx, 0x7E00
     call disk_read
+
+    mov si, os_boot_message
+    call print
 
     HLT
 
@@ -51,14 +51,14 @@ halt:
 ; cx [0-5] - Sector number
 ; cx [6-15] - Sector number
 ; dx - head
-lba_chs:
+lba_to_chs:
     push ax
     push dx
 
     xor dx, dx
     div word [bdb_sectors_per_track]
     inc dx
-    mov dx, cx
+    mov cx, dx
 
     xor dx, dx
     div word [bdb_heads]
@@ -82,7 +82,7 @@ disk_read:
     push dx
     push di
     
-    call lba_chs
+    call lba_to_chs
     mov ah, 02h
     mov di, 3
 
@@ -141,8 +141,8 @@ done_print:
     pop bx
     ret
 
-os_boot_message DB 'OS booted successfully', 0x0D, 0x0A, 0
-read_failure DB 'Failed to read disk', 0x0D, 0x0A, 0
+os_boot_message: DB 'OS booted successfully', 0x0D, 0x0A, 0
+read_failure: DB 'Failed to read disk', 0x0D, 0x0A, 0
 
 TIMES 510-($-$$) DB 0
 DW 0AA55h
