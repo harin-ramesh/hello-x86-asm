@@ -5,7 +5,7 @@ jmp short main
 nop
 
 bdb_oem: DB "MSWIN4.1"
-bdb_byter_per_sector: DW 512
+bdb_bytes_per_sector: DW 512
 bdb_sectors_per_cluster: DB 1
 bdb_reserved_sectors: DW 1
 bdb_fat_count: DB 2
@@ -40,11 +40,114 @@ main:
 
     mov si, os_boot_message
     call print
+    
+    mov ax, [bdb_sectors_per_fat]
+    mov bx, [bdb_fat_count]
+    xor bh, bh
+    mul bx
+    add ax, [bdb_reserved_sectors]
+    push ax
 
-    HLT
+    mov ax, [bdb_dir_entries_count]
+    shl ax, 5
+    xor dx, dx
+    div word [bdb_bytes_per_sector]
 
+    test dx, dx
+    jz root_dir_after
+    inc ax
+
+root_dir_after:
+    mov cl, al
+    pop ax
+    mov dl, [ebr_drive_number]
+    mov bx, buffer
+    call disk_read
+
+    xor bx, bx
+    mov di, buffer
+
+search_kernal:
+    mov si, file_kernal_bin 
+    mov cx, 11
+    push di
+    repe cmpsb 
+    pop di
+    je kernal_found
+
+    add di, 32
+    inc bx
+    cmp bx, [bdb_dir_entries_count]
+    jl search_kernal
+
+    jmp kernal_not_found
+
+kernal_not_found:
+    mov si, read_failure 
+    call print
+    hlt
+    jmp halt
+
+kernal_found:
+    mov ax, [di+26]
+    mov [kernal_cluster], ax
+    
+    mov ax, [bdb_reserved_sectors]
+    mov bx, buffer
+    mov cl, [bdb_sectors_per_fat]
+    mov dl, [ebr_drive_number]
+    call disk_read
+
+    mov bx, kernal_load_segment
+    mov es, bx
+    mov bx, kernal_load_offset
+
+load_kernal:
+    mov ax, [kernal_cluster]
+    add ax, 31
+    mov cl, 1
+    mov dl, [ebr_drive_number]
+    call disk_read
+    add bx, [bdb_bytes_per_sector]
+
+    mov ax, [kernal_cluster]
+    mov cx, 3
+    mul cx
+    mov cx, 2
+    div cx
+
+    mov si, buffer
+    add si, ax
+    mov ax, [ds:si]
+
+    or dx, dx
+    jz even
+
+odd:
+    shr ax, 4
+    jmp next_cluster_after
+
+even:
+    and ax, 0x0FFF
+
+next_cluster_after:
+    cmp ax, 0x0FF8
+    jae read_finish
+
+    mov [kernal_cluster], ax
+    jmp load_kernal
+
+read_finish:
+    mov dl, [ebr_drive_number]
+    mov ax, kernal_load_segment
+    mov ds, ax
+    mov es, ax
+    
+    jmp kernal_load_segment:kernal_load_offset
+
+    hlt 
 halt:
-    JMP halt
+    jmp halt
 
 ; Input: lba index in ax
 ; Output: 
@@ -96,7 +199,7 @@ retry:
     jnz retry
 
 failed_disk_read:
-    mov si, read_failure
+    mov si, disk_read_failure
     call print
     hlt
     jmp halt
@@ -116,9 +219,7 @@ done_read:
     pop cx
     pop dx
     pop di
-
     ret
-
 
 print:
     push si
@@ -141,8 +242,16 @@ done_print:
     pop bx
     ret
 
-os_boot_message: DB 'OS booted successfully', 0x0D, 0x0A, 0
-read_failure: DB 'Failed to read disk', 0x0D, 0x0A, 0
+os_boot_message DB 'Loading....', 0x0D, 0x0A, 0
+disk_read_failure DB 'Failed to read disk', 0x0D, 0x0A, 0
+file_kernal_bin DB 'KERNEL  BIN'
+read_failure DB 'Kernal not found', 0x0D, 0x0A, 0
+kernal_cluster DW 0
+
+kernal_load_segment EQU 0x2000
+kernal_load_offset EQU 0
 
 TIMES 510-($-$$) DB 0
 DW 0AA55h
+
+buffer:
