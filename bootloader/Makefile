@@ -26,3 +26,6 @@ $(BUILD_DIR)/bootloader.bin:
 kernal: $(BUILD_DIR)/kernal.bin
 $(BUILD_DIR)/kernal.bin:
 	$(ASM) $(SRC_DIR)/kernal/main.asm -f bin -o $@
+
+clean:
+	rm -r build/*

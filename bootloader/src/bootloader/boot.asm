@@ -41,15 +41,22 @@ main:
     mov si, os_boot_message
     call print
     
+    ; 4 Segments in FAT 12
+    ; Reserved segement - 1 segment
+    ; FAT - fat_count * sectors_per_fat sector, 2*9 = 18 sectors
+    ; Root dir - 32 bytes each entry
+    ; Data
+
+    ; LBA of root dir calculation
     mov ax, [bdb_sectors_per_fat]
     mov bx, [bdb_fat_count]
     xor bh, bh
     mul bx
-    add ax, [bdb_reserved_sectors]
-    push ax
+    add ax, [bdb_reserved_sectors] ; LBA of root dir
+    push ax 
 
     mov ax, [bdb_dir_entries_count]
-    shl ax, 5
+    shl ax, 5 ; ax *= 32
     xor dx, dx
     div word [bdb_bytes_per_sector]
 
@@ -144,7 +151,6 @@ read_finish:
     mov es, ax
     
     jmp kernal_load_segment:kernal_load_offset
-
     hlt 
 halt:
     jmp halt
@@ -242,14 +248,14 @@ done_print:
     pop bx
     ret
 
-os_boot_message DB 'Loading....', 0x0D, 0x0A, 0
-disk_read_failure DB 'Failed to read disk', 0x0D, 0x0A, 0
-file_kernal_bin DB 'KERNEL  BIN'
-read_failure DB 'Kernal not found', 0x0D, 0x0A, 0
-kernal_cluster DW 0
+os_boot_message: DB 'Loading....', 0x0D, 0x0A, 0
+disk_read_failure: DB 'Failed to read disk', 0x0D, 0x0A, 0
+file_kernal_bin: DB 'KERNAL  BIN'
+read_failure: DB 'Kernal not found', 0x0D, 0x0A, 0
+kernal_cluster: DW 0
 
-kernal_load_segment EQU 0x2000
-kernal_load_offset EQU 0
+kernal_load_segment: EQU 0x2000
+kernal_load_offset: EQU 0
 
 TIMES 510-($-$$) DB 0
 DW 0AA55h
