@@ -32,22 +32,22 @@ main:
     mov ss, ax
     mov sp, 0x7c00
 
-    mov [ebr_drive_number], dl
-    mov ax, 1
-    mov cl, 1
-    mov bx, 0x7E00
-    call disk_read
+    ; Disk read example
+    ; mov dl, [ebr_drive_number]
+    ; mov ax, 1 ; LBA
+    ; mov bx, 0x7E00 ; address to which to read
+    ; call disk_read
 
-    mov si, os_boot_message
+    mov si, os_loading_message
     call print
-    
+ 
     ; 4 Segments in FAT 12
     ; Reserved segement - 1 segment
     ; FAT - fat_count * sectors_per_fat sector, 2*9 = 18 sectors
     ; Root dir - 32 bytes each entry
     ; Data
 
-    ; LBA of root dir calculation
+    ; LBA calculation of root dir
     mov ax, [bdb_sectors_per_fat]
     mov bx, [bdb_fat_count]
     xor bh, bh
@@ -101,7 +101,6 @@ kernal_found:
     
     mov ax, [bdb_reserved_sectors]
     mov bx, buffer
-    mov cl, [bdb_sectors_per_fat]
     mov dl, [ebr_drive_number]
     call disk_read
 
@@ -112,7 +111,6 @@ kernal_found:
 load_kernal:
     mov ax, [kernal_cluster]
     add ax, 31
-    mov cl, 1
     mov dl, [ebr_drive_number]
     call disk_read
     add bx, [bdb_bytes_per_sector]
@@ -157,74 +155,91 @@ halt:
 
 ; Input: lba index in ax
 ; Output: 
-; cx [0-5] - Sector number
-; cx [6-15] - Sector number
-; dx - head
+; cl [0-5] - Sector number
+; ch [6-15] - Sector number
+; dh - head
+; dl - drive number
+;
+; track, t = LBA / sector_per_track
+; sector, s = (LBA % sector_per_track)+1
+; head, h = (t % number_of_heads)
+; cylinder, c = (t / number_of_heads)
+;
 lba_to_chs:
+    ; Preserve AX and DX registers
     push ax
     push dx
 
+    ; Calculate the cylinder and store it in CX
     xor dx, dx
     div word [bdb_sectors_per_track]
     inc dx
-    mov cx, dx
+    mov cx, dx  ; Store cylinder in CX
 
+    ; Calculate head and store in DH, and store the sector in CL
     xor dx, dx
     div word [bdb_heads]
+    mov dh, dl  ; Store head in DH
+    mov ch, al  ; Store track in CH
+    shl ah, 6    ; Shift AH to set the upper part of the sector
+    or cl, ah    ; Combine AH into CL for the sector
 
-    mov dh, dl
-    mov ch, al
-    shl ah, 6
-    or cl, ah
-    
+    ; Restore AX and DX registers
     pop ax
     mov dl, al
     pop ax
 
     ret
-    
 
 disk_read:
+    ; Preserve registers
     push ax
     push bx
     push cx
     push dx
     push di
-    
+
+    ; Call lba_to_chs to convert LBA to CHS
     call lba_to_chs
-    mov ah, 02h
-    mov di, 3
+
+    ; Prepare for disk read operation
+    mov ah, 02h   ; Disk read function
+    mov di, 3     ; Retry counter (3 attempts)
 
 retry:
-    stc
-    int 13h
-    jnc done_read
+    stc            ; Set carry flag to initiate disk read
+    int 13h        ; Call BIOS interrupt for disk read
+    jnc done_read  ; If no error, continue
+
+    ; If error, reset the disk and retry
     call disk_reset
     dec di
     test di, di
-    jnz retry
+    jnz retry      ; Retry if the counter is not zero
 
 failed_disk_read:
+    ; If all retries fail, print failure message and halt
     mov si, disk_read_failure
     call print
     hlt
-    jmp halt
 
 disk_reset:
+    ; Reset the disk
     pusha
-    mov ah, 0
+    mov ah, 0      ; Reset disk
     stc
-    int 13h
-    jc failed_disk_read
+    int 13h        ; Call BIOS interrupt for reset
+    jc failed_disk_read ; If error, jump to failure
     popa
     ret
 
 done_read:
-    pop ax
-    pop bx
-    pop cx
-    pop dx
+    ; Restore registers
     pop di
+    pop dx
+    pop cx
+    pop bx
+    pop ax
     ret
 
 print:
@@ -248,7 +263,7 @@ done_print:
     pop bx
     ret
 
-os_boot_message: DB 'Loading....', 0x0D, 0x0A, 0
+os_loading_message: DB 'Loading....', 0x0D, 0x0A, 0
 disk_read_failure: DB 'Failed to read disk', 0x0D, 0x0A, 0
 file_kernal_bin: DB 'KERNAL  BIN'
 read_failure: DB 'Kernal not found', 0x0D, 0x0A, 0
