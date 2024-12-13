@@ -55,6 +55,7 @@ main:
     add ax, [bdb_reserved_sectors] ; LBA of root dir
     push ax 
 
+    ; Calculating number of sector occupied by root dir
     mov ax, [bdb_dir_entries_count]
     shl ax, 5 ; ax *= 32
     xor dx, dx
@@ -65,8 +66,8 @@ main:
     inc ax
 
 root_dir_after:
-    mov cl, al
-    pop ax
+    mov cl, al ; number of sectors to read
+    pop ax ; LBA
     mov dl, [ebr_drive_number]
     mov bx, buffer
     call disk_read
@@ -76,13 +77,13 @@ root_dir_after:
 
 search_kernal:
     mov si, file_kernal_bin 
-    mov cx, 11
+    mov cx, 11 ; size of the file name
     push di
     repe cmpsb 
     pop di
     je kernal_found
 
-    add di, 32
+    add di, 32 ; Moving to next entry in root dir
     inc bx
     cmp bx, [bdb_dir_entries_count]
     jl search_kernal
@@ -96,9 +97,10 @@ kernal_not_found:
     jmp halt
 
 kernal_found:
-    mov ax, [di+26]
+    mov ax, [di+26] ; to load starting starting cluster of kernal to ax
     mov [kernal_cluster], ax
-    
+
+    ; Loading FAT into memeory
     mov ax, [bdb_reserved_sectors]
     mov bx, buffer
     mov dl, [ebr_drive_number]
@@ -115,27 +117,35 @@ load_kernal:
     call disk_read
     add bx, [bdb_bytes_per_sector]
 
-    mov ax, [kernal_cluster]
-    mov cx, 3
-    mul cx
-    mov cx, 2
-    div cx
+    mov ax, [kernal_cluster]  ; Get current memory address (or cluster) in AX
+    mov cx, 3                 ; Set multiplier to 3
+    mul cx                    ; Multiply AX by 3
+    mov cx, 2                 ; Set divisor to 2
+    div cx                    ; Divide by 2
 
-    mov si, buffer
-    add si, ax
-    mov ax, [ds:si]
+    mov si, buffer           ; Load the address of the FAT table (buffer) into SI.
+    add si, ax               ; Add the computed offset to SI.
+    mov ax, [ds:si]          ; Load the 16 bits starting from that offset into AX.
 
-    or dx, dx
-    jz even
+    or dx, dx                ; Test if DX (from the previous division) is zero.
+    jz even                  ; If zero, it's an "even" cluster; otherwise, it's "odd."
 
 odd:
-    shr ax, 4
+    shr ax, 4            ; Right-shift AX by 4 to isolate the high 12 bits of the 16-bit entry.
     jmp next_cluster_after
 
 even:
-    and ax, 0x0FFF
+    and ax, 0x0FFF       ; Mask the low 12 bits to isolate the desired cluster number.
 
 next_cluster_after:
+    cmp ax, 0x0FF8
+    jae read_finish
+
+    ; In FAT file systems (specifically FAT12), cluster numbers 0x0FF8, 0x0FF9, 0x0FFA, 0x0FFB,
+    ; 0x0FFC, and 0x0FFD are reserved as end-of-chain markers (EOC). When the ax value reaches
+    ; or exceeds 0x0FF8, it indicates that the current cluster is the last one in the chain,
+    ; meaning there's no further cluster to read.
+
     cmp ax, 0x0FF8
     jae read_finish
 
