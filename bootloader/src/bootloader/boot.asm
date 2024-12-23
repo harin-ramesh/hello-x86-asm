@@ -138,14 +138,10 @@ even:
     and ax, 0x0FFF       ; Mask the low 12 bits to isolate the desired cluster number.
 
 next_cluster_after:
-    cmp ax, 0x0FF8
-    jae read_finish
-
     ; In FAT file systems (specifically FAT12), cluster numbers 0x0FF8, 0x0FF9, 0x0FFA, 0x0FFB,
     ; 0x0FFC, and 0x0FFD are reserved as end-of-chain markers (EOC). When the ax value reaches
     ; or exceeds 0x0FF8, it indicates that the current cluster is the last one in the chain,
     ; meaning there's no further cluster to read.
-
     cmp ax, 0x0FF8
     jae read_finish
 
@@ -166,7 +162,7 @@ halt:
 ; Input: lba index in ax
 ; Output: 
 ; cl [0-5] - Sector number
-; ch [6-15] - Sector number
+; ch [6-15] - Cylinder number
 ; dh - head
 ; dl - drive number
 ;
