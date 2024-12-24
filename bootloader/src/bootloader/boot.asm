@@ -112,6 +112,10 @@ kernal_found:
 
 load_kernal:
     mov ax, [kernal_cluster]
+    ; The first data cluster (cluster 2) is located at sector 31 on the disk.
+    ; to translate any cluster number into a corresponding logical sector, the formula becomes:
+    ; Logical Sector = Cluster Number + 31
+    ; in FAT Once Cluster = One Sector
     add ax, 31
     mov dl, [ebr_drive_number]
     call disk_read
