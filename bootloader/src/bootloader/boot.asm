@@ -102,6 +102,7 @@ kernal_found:
 
     ; Loading FAT into memeory
     mov ax, [bdb_reserved_sectors]
+    mov cl, [bdb_sectors_per_fat]
     mov bx, buffer
     mov dl, [ebr_drive_number]
     call disk_read
@@ -117,6 +118,7 @@ load_kernal:
     ; Logical Sector = Cluster Number + 31
     ; in FAT Once Cluster = One Sector
     add ax, 31
+    add cl, 1
     mov dl, [ebr_drive_number]
     call disk_read
     add bx, [bdb_bytes_per_sector]
