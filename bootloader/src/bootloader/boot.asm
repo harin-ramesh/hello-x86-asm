@@ -30,6 +30,7 @@ main:
     mov dx, ax 
     mov es, ax
     mov ss, ax
+    mov ds, ax
     mov sp, 0x7c00
 
     ; Disk read example
@@ -75,30 +76,30 @@ root_dir_after:
     xor bx, bx
     mov di, buffer
 
-search_kernal:
-    mov si, file_kernal_bin 
+search_kernel:
+    mov si, file_kernel_bin 
     mov cx, 11 ; size of the file name
     push di
     repe cmpsb 
     pop di
-    je kernal_found
+    je kernel_found
 
     add di, 32 ; Moving to next entry in root dir
     inc bx
     cmp bx, [bdb_dir_entries_count]
-    jl search_kernal
+    jl search_kernel
 
-    jmp kernal_not_found
+    jmp kernel_not_found
 
-kernal_not_found:
+kernel_not_found:
     mov si, read_failure 
     call print
     hlt
     jmp halt
 
-kernal_found:
-    mov ax, [di+26] ; to load starting starting cluster of kernal to ax
-    mov [kernal_cluster], ax
+kernel_found:
+    mov ax, [di+26] ; to load starting starting cluster of kernel to ax
+    mov [kernel_cluster], ax
 
     ; Loading FAT into memeory
     mov ax, [bdb_reserved_sectors]
@@ -107,12 +108,12 @@ kernal_found:
     mov dl, [ebr_drive_number]
     call disk_read
 
-    mov bx, kernal_load_segment
+    mov bx, kernel_load_segment
     mov es, bx
-    mov bx, kernal_load_offset
+    mov bx, kernel_load_offset
 
-load_kernal:
-    mov ax, [kernal_cluster]
+load_kernel:
+    mov ax, [kernel_cluster]
     ; The first data cluster (cluster 2) is located at sector 31 on the disk.
     ; to translate any cluster number into a corresponding logical sector, the formula becomes:
     ; Logical Sector = Cluster Number + 31
@@ -123,7 +124,7 @@ load_kernal:
     call disk_read
     add bx, [bdb_bytes_per_sector]
 
-    mov ax, [kernal_cluster]  ; Get current memory address (or cluster) in AX
+    mov ax, [kernel_cluster]  ; Get current memory address (or cluster) in AX
     mov cx, 3                 ; Set multiplier to 3
     mul cx                    ; Multiply AX by 3
     mov cx, 2                 ; Set divisor to 2
@@ -151,16 +152,16 @@ next_cluster_after:
     cmp ax, 0x0FF8
     jae read_finish
 
-    mov [kernal_cluster], ax
-    jmp load_kernal
+    mov [kernel_cluster], ax
+    jmp load_kernel
 
 read_finish:
     mov dl, [ebr_drive_number]
-    mov ax, kernal_load_segment
+    mov ax, kernel_load_segment
     mov ds, ax
     mov es, ax
     
-    jmp kernal_load_segment:kernal_load_offset
+    jmp kernel_load_segment:kernel_load_offset
     hlt 
 halt:
     jmp halt
@@ -277,12 +278,12 @@ done_print:
 
 os_loading_message: DB 'Loading....', 0x0D, 0x0A, 0
 disk_read_failure: DB 'Failed to read disk', 0x0D, 0x0A, 0
-file_kernal_bin: DB 'KERNAL  BIN'
-read_failure: DB 'Kernal not found', 0x0D, 0x0A, 0
-kernal_cluster: DW 0
+file_kernel_bin: DB 'KERNEL  BIN'
+read_failure: DB 'Kernel not found', 0x0D, 0x0A, 0
+kernel_cluster: DW 0
 
-kernal_load_segment: EQU 0x2000
-kernal_load_offset: EQU 0
+kernel_load_segment: EQU 0x2000
+kernel_load_offset: EQU 0
 
 TIMES 510-($-$$) DB 0
 DW 0AA55h
